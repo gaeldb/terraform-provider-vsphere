@@ -225,14 +225,11 @@ func testAccResourceVSphereComputeClusterVMHostRulePreCheck(t *testing.T) {
 	if os.Getenv("VSPHERE_DATACENTER") == "" {
 		t.Skip("set VSPHERE_DATACENTER to run vsphere_compute_cluster_vm_host_rule acceptance tests")
 	}
+	if os.Getenv("VSPHERE_ESXI_HOST4") == "" {
+		t.Skip("set VSPHERE_ESXI_HOST4 to run vsphere_compute_cluster_vm_host_rule acceptance tests")
+	}
 	if os.Getenv("VSPHERE_ESXI_HOST5") == "" {
 		t.Skip("set VSPHERE_ESXI_HOST5 to run vsphere_compute_cluster_vm_host_rule acceptance tests")
-	}
-	if os.Getenv("VSPHERE_ESXI_HOST6") == "" {
-		t.Skip("set VSPHERE_ESXI_HOST6 to run vsphere_compute_cluster_vm_host_rule acceptance tests")
-	}
-	if os.Getenv("VSPHERE_ESXI_HOST7") == "" {
-		t.Skip("set VSPHERE_ESXI_HOST7 to run vsphere_compute_cluster_vm_host_rule acceptance tests")
 	}
 	if os.Getenv("VSPHERE_DATASTORE") == "" {
 		t.Skip("set VSPHERE_DATASTORE to run vsphere_compute_cluster_vm_host_rule acceptance tests")
@@ -325,7 +322,6 @@ variable "hosts" {
   default = [
     "%s",
     "%s",
-    "%s",
   ]
 }
 
@@ -360,7 +356,7 @@ data "vsphere_host" "hosts" {
 resource "vsphere_compute_cluster" "cluster" {
   name            = "terraform-compute-cluster-test"
   datacenter_id   = "${data.vsphere_datacenter.dc.id}"
-  host_system_ids = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids = "${data.vsphere_host.hosts.*.id}"
 
   force_evacuate_on_destroy = true
 }
@@ -389,13 +385,13 @@ resource "vsphere_virtual_machine" "vm" {
 resource "vsphere_compute_cluster_host_group" "cluster_host_group" {
   name               = "terraform-test-cluster-host-group"
   compute_cluster_id = "${vsphere_compute_cluster.cluster.id}"
-  host_system_ids    = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids    = "${data.vsphere_host.hosts.*.id}"
 }
 
 resource "vsphere_compute_cluster_vm_group" "cluster_vm_group" {
   name                = "terraform-test-cluster-vm-group"
   compute_cluster_id  = "${vsphere_compute_cluster.cluster.id}"
-  virtual_machine_ids = ["${vsphere_virtual_machine.vm.*.id}"]
+  virtual_machine_ids = "${vsphere_virtual_machine.vm.*.id}"
 }
 
 resource "vsphere_compute_cluster_vm_host_rule" "cluster_vm_host_rule" {
@@ -406,9 +402,8 @@ resource "vsphere_compute_cluster_vm_host_rule" "cluster_vm_host_rule" {
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_ESXI_HOST4"),
 		os.Getenv("VSPHERE_ESXI_HOST5"),
-		os.Getenv("VSPHERE_ESXI_HOST6"),
-		os.Getenv("VSPHERE_ESXI_HOST7"),
 		os.Getenv("VSPHERE_DATASTORE"),
 		os.Getenv("VSPHERE_NETWORK_LABEL_PXE"),
 	)
@@ -424,7 +419,6 @@ variable "hosts" {
   default = [
     "%s",
     "%s",
-    "%s",
   ]
 }
 
@@ -459,7 +453,7 @@ data "vsphere_host" "hosts" {
 resource "vsphere_compute_cluster" "cluster" {
   name            = "terraform-compute-cluster-test"
   datacenter_id   = "${data.vsphere_datacenter.dc.id}"
-  host_system_ids = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids = "${data.vsphere_host.hosts.*.id}"
 
   force_evacuate_on_destroy = true
 }
@@ -488,13 +482,13 @@ resource "vsphere_virtual_machine" "vm" {
 resource "vsphere_compute_cluster_host_group" "cluster_host_group" {
   name               = "terraform-test-cluster-host-group"
   compute_cluster_id = "${vsphere_compute_cluster.cluster.id}"
-  host_system_ids    = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids    = "${data.vsphere_host.hosts.*.id}"
 }
 
 resource "vsphere_compute_cluster_vm_group" "cluster_vm_group" {
   name                = "terraform-test-cluster-vm-group"
   compute_cluster_id  = "${vsphere_compute_cluster.cluster.id}"
-  virtual_machine_ids = ["${vsphere_virtual_machine.vm.*.id}"]
+  virtual_machine_ids = "${vsphere_virtual_machine.vm.*.id}"
 }
 
 resource "vsphere_compute_cluster_vm_host_rule" "cluster_vm_host_rule" {
@@ -505,9 +499,8 @@ resource "vsphere_compute_cluster_vm_host_rule" "cluster_vm_host_rule" {
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_ESXI_HOST4"),
 		os.Getenv("VSPHERE_ESXI_HOST5"),
-		os.Getenv("VSPHERE_ESXI_HOST6"),
-		os.Getenv("VSPHERE_ESXI_HOST7"),
 		os.Getenv("VSPHERE_DATASTORE"),
 		os.Getenv("VSPHERE_NETWORK_LABEL_PXE"),
 	)
@@ -523,7 +516,6 @@ variable "hosts" {
   default = [
     "%s",
     "%s",
-    "%s",
   ]
 }
 
@@ -558,7 +550,7 @@ data "vsphere_host" "hosts" {
 resource "vsphere_compute_cluster" "cluster" {
   name            = "terraform-compute-cluster-test"
   datacenter_id   = "${data.vsphere_datacenter.dc.id}"
-  host_system_ids = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids = "${data.vsphere_host.hosts.*.id}"
 
   force_evacuate_on_destroy = true
 }
@@ -587,13 +579,13 @@ resource "vsphere_virtual_machine" "vm" {
 resource "vsphere_compute_cluster_host_group" "cluster_host_group" {
   name               = "terraform-test-cluster-host-group"
   compute_cluster_id = "${vsphere_compute_cluster.cluster.id}"
-  host_system_ids    = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids    = "${data.vsphere_host.hosts.*.id}"
 }
 
 resource "vsphere_compute_cluster_vm_group" "cluster_vm_group" {
   name                = "terraform-test-cluster-vm-group"
   compute_cluster_id  = "${vsphere_compute_cluster.cluster.id}"
-  virtual_machine_ids = ["${vsphere_virtual_machine.vm.*.id}"]
+  virtual_machine_ids = "${vsphere_virtual_machine.vm.*.id}"
 }
 
 resource "vsphere_compute_cluster_vm_host_rule" "cluster_vm_host_rule" {
@@ -605,9 +597,8 @@ resource "vsphere_compute_cluster_vm_host_rule" "cluster_vm_host_rule" {
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_ESXI_HOST4"),
 		os.Getenv("VSPHERE_ESXI_HOST5"),
-		os.Getenv("VSPHERE_ESXI_HOST6"),
-		os.Getenv("VSPHERE_ESXI_HOST7"),
 		os.Getenv("VSPHERE_DATASTORE"),
 		os.Getenv("VSPHERE_NETWORK_LABEL_PXE"),
 	)

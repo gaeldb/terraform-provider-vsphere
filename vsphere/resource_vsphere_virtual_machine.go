@@ -91,6 +91,12 @@ func resourceVSphereVirtualMachine() *schema.Resource {
 			Computed:    true,
 			Description: "The ID of an optional host system to pin the virtual machine to.",
 		},
+		"wait_for_guest_ip_timeout": {
+			Type:        schema.TypeInt,
+			Optional:    true,
+			Default:     0,
+			Description: "The amount of time, in minutes, to wait for an available IP address on this virtual machine. A value less than 1 disables the waiter.",
+		},
 		"wait_for_guest_net_timeout": {
 			Type:        schema.TypeInt,
 			Optional:    true,
@@ -102,6 +108,12 @@ func resourceVSphereVirtualMachine() *schema.Resource {
 			Optional:    true,
 			Default:     true,
 			Description: "Controls whether or not the guest network waiter waits for a routable address. When false, the waiter does not wait for a default gateway, nor are IP addresses checked against any discovered default gateways as part of its success criteria.",
+		},
+		"ignored_guest_ips": {
+			Type:        schema.TypeList,
+			Optional:    true,
+			Description: "List of IP addresses to ignore while waiting for an IP",
+			Elem:        &schema.Schema{Type: schema.TypeString},
 		},
 		"shutdown_wait_timeout": {
 			Type:         schema.TypeInt,
@@ -197,7 +209,7 @@ func resourceVSphereVirtualMachine() *schema.Resource {
 			Computed:    true,
 			Description: "A flag internal to Terraform that indicates that this resource was either imported or came from a earlier major version of this resource. Reset after the first post-import or post-upgrade apply.",
 		},
-		"moid": &schema.Schema{
+		"moid": {
 			Type:        schema.TypeString,
 			Computed:    true,
 			Description: "The machine object ID from VMWare",
@@ -266,12 +278,48 @@ func resourceVSphereVirtualMachineCreate(d *schema.ResourceData, meta interface{
 		}
 	}
 
+	// The host attribute of CreateVM_Task seems to be ignored in vCenter 6.7.
+	// Ensure that VMs are on the correct host and relocate if necessary. Do this
+	// near the end of the VM creation since it involves updating the
+	// ResourceData.
+	vprops, err := virtualmachine.Properties(vm)
+	if err != nil {
+		return err
+	}
+	if hid, ok := d.GetOk("host_system_id"); hid.(string) != vprops.Runtime.Host.Reference().Value && ok {
+		err = resourceVSphereVirtualMachineRead(d, meta)
+		if err != nil {
+			return err
+		}
+		// Restore the old host_system_id so we can still tell if a relocation is
+		// necessary.
+		err = d.Set("host_system_id", hid.(string))
+		if err != nil {
+			return err
+		}
+		if err = resourceVSphereVirtualMachineUpdateLocation(d, meta); err != nil {
+			return err
+		}
+	}
+
+	// Wait for guest IP address if we have been set to wait for one
+	err = virtualmachine.WaitForGuestIP(
+		client,
+		vm,
+		d.Get("wait_for_guest_ip_timeout").(int),
+		d.Get("ignored_guest_ips").([]interface{}),
+	)
+	if err != nil {
+		return err
+	}
+
 	// Wait for a routable address if we have been set to wait for one
 	err = virtualmachine.WaitForGuestNet(
 		client,
 		vm,
 		d.Get("wait_for_guest_net_routable").(bool),
 		d.Get("wait_for_guest_net_timeout").(int),
+		d.Get("ignored_guest_ips").([]interface{}),
 	)
 	if err != nil {
 		return err
@@ -518,11 +566,21 @@ func resourceVSphereVirtualMachineUpdate(d *schema.ResourceData, meta interface{
 			if err := virtualmachine.PowerOn(vm); err != nil {
 				return fmt.Errorf("error powering on virtual machine: %s", err)
 			}
+			err = virtualmachine.WaitForGuestIP(
+				client,
+				vm,
+				d.Get("wait_for_guest_ip_timeout").(int),
+				d.Get("ignored_guest_ips").([]interface{}),
+			)
+			if err != nil {
+				return err
+			}
 			err = virtualmachine.WaitForGuestNet(
 				client,
 				vm,
 				d.Get("wait_for_guest_net_routable").(bool),
 				d.Get("wait_for_guest_net_timeout").(int),
+				d.Get("ignored_guest_ips").([]interface{}),
 			)
 			if err != nil {
 				return err
@@ -691,6 +749,11 @@ func resourceVSphereVirtualMachineCustomizeDiff(d *schema.ResourceDiff, meta int
 				if strings.HasSuffix(k, ".#") {
 					k = strings.TrimSuffix(k, ".#")
 				}
+				// To maintain consistency with other timeout options, timeout does not
+				// need to ForceNew
+				if k == "clone.0.timeout" {
+					continue
+				}
 				d.ForceNew(k)
 			}
 		}
@@ -845,6 +908,7 @@ func resourceVSphereVirtualMachineImport(d *schema.ResourceData, meta interface{
 	d.Set("force_power_off", rs["force_power_off"].Default)
 	d.Set("migrate_wait_timeout", rs["migrate_wait_timeout"].Default)
 	d.Set("shutdown_wait_timeout", rs["shutdown_wait_timeout"].Default)
+	d.Set("wait_for_guest_ip_timeout", rs["wait_for_guest_ip_timeout"].Default)
 	d.Set("wait_for_guest_net_timeout", rs["wait_for_guest_net_timeout"].Default)
 	d.Set("wait_for_guest_net_routable", rs["wait_for_guest_net_routable"].Default)
 

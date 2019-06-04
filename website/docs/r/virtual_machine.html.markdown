@@ -36,7 +36,7 @@ VMDK-backed virtual disks - it does not support other special kinds of disk
 devices like RDM disks.
 
 Disks are managed by an arbitrary label supplied to the [`label`](#label)
-attribute of a [`disk` sub-resource](#disk-options). This is separate from the
+attribute of a [`disk` block](#disk-options). This is separate from the
 automatic naming that vSphere picks for you when creating a virtual machine.
 Control over a virtual disk's name is not supported unless you are attaching an
 external disk with the [`attach`](#attach) attribute.
@@ -81,8 +81,10 @@ Two waiters of note are:
   the guest virtual machine, mainly to facilitate the availability of a valid,
   reachable default IP address for any [provisioners][tf-docs-provisioners].
   The behavior of the waiter can be controlled with the
-  [`wait_for_guest_net_timeout`](#wait_for_guest_net_timeout) and
-  [`wait_for_guest_net_routable`](#wait_for_guest_net_routable) settings.
+  [`wait_for_guest_net_timeout`](#wait_for_guest_net_timeout),
+  [`wait_for_guest_net_routable`](#wait_for_guest_net_routable),
+  [`wait_for_guest_ip_timeout`](#wait_for_guest_ip_timeout), and
+  [`ignored_guest_ips`](#ignored_guest_ips) settings.
 
 [tf-docs-provisioners]: /docs/provisioners/index.html
 
@@ -284,7 +286,7 @@ data "vsphere_network" "network" {
   datacenter_id = "${data.vsphere_datacenter.dc.id}"
 }
 
-data "vsphere_virtual_machine" "tempate_from_ovf" {
+data "vsphere_virtual_machine" "template_from_ovf" {
   name          = "template_from_ovf"
   datacenter_id = "${data.vsphere_datacenter.dc.id}"
 }
@@ -318,12 +320,7 @@ resource "vsphere_virtual_machine" "vm" {
 
   vapp {
     properties {
-      "guestinfo.hostname"                        = "terraform-test.foobar.local"
-      "guestinfo.interface.0.name"                = "ens192"
-      "guestinfo.interface.0.ip.0.address"        = "10.0.0.100/24"
-      "guestinfo.interface.0.route.0.gateway"     = "10.0.0.1"
-      "guestinfo.interface.0.route.0.destination" = "0.0.0.0/0"
-      "guestinfo.dns.server.0"                    = "10.0.0.10"
+      "guestinfo.tf.internal.id" = "42"
     }
   }
 }
@@ -484,12 +481,12 @@ connections.
   Can be one of `bios` or `EFI`. Default: `bios`.
 * `extra_config` - (Optional) Extra configuration data for this virtual
   machine. Can be used to supply advanced parameters not normally in
-  configuration, such as data for cloud-config (under the guestinfo namespace).
+  configuration, such as instance metadata.
 
 ~> **NOTE:** Do not use `extra_config` when working with a template imported
 from OVF or OVA as more than likely your settings will be ignored. Use the
-`vapp` sub-resource's `properties` section as outlined in [Using vApp
-properties to supply OVF/OVA
+`vapp` block's `properties` section as outlined in [Using vApp properties to
+supply OVF/OVA
 configuration](#using-vapp-properties-to-supply-ovf-ova-configuration).
 
 * `scsi_type` - (Optional) The type of SCSI bus this virtual machine will have.
@@ -641,12 +638,26 @@ you may have to adjust [`memory_reservation`](#memory_reservation) to the full
 amount of memory provisioned for the virtual machine.
 
 * `wait_for_guest_net_timeout` - (Optional) The amount of time, in minutes, to
-  wait for an available IP address on this virtual machine. A value less than 1
-  disables the waiter. Default: 5 minutes.
+  wait for an available IP address on this virtual machine's NICs. Older
+  versions of VMware Tools do not populate this property. In those cases, this
+  waiter can be disabled and the
+  [`wait_for_guest_ip_timeout`](#wait_for_guest_ip_timeout) waiter can be used
+  instead. A value less than 1 disables the waiter. Default: 5 minutes.
 * `wait_for_guest_net_routable` - (Optional) Controls whether or not the guest
   network waiter waits for a routable address. When `false`, the waiter does
   not wait for a default gateway, nor are IP addresses checked against any
-  discovered default gateways as part of its success criteria. Default: `true`.
+  discovered default gateways as part of its success criteria. This property is
+  ignored if the [`wait_for_guest_ip_timeout`](#wait_for_guest_ip_timeout)
+  waiter is used. Default: `true`.
+* `wait_for_guest_ip_timeout` - (Optional) The amount of time, in minutes, to
+  wait for an available guest IP address on this virtual machine. This should
+  only be used if your version of VMware Tools does not allow the
+  [`wait_for_guest_net_timeout`](#wait_for_guest_net_timeout) waiter to be
+  used. A value less than 1 disables the waiter. Default: 0.
+* `ignored_guest_ips` - (Optional) List of IP addresses to ignore while waiting
+  for an available IP address using either of the waiters. Any IP addresses in
+  this list will be ignored if they show up so that the waiter will continue to
+  wait for a real IP address. Default: [].
 * `shutdown_wait_timeout` - (Optional) The amount of time, in minutes, to wait
   for a graceful guest shutdown when making necessary updates to the virtual
   machine. If `force_power_off` is set to true, the VM will be force powered-off
@@ -671,7 +682,7 @@ this value to add out-of-band devices.
 
 ### Disk options
 
-Virtual disks are managed by adding an instance of the `disk` sub-resource.
+Virtual disks are managed by adding an instance of the `disk` block.
 
 At the very least, there must be `name` and `size` attributes. `unit_number` is
 required for any disk other than the first, and there must be at least one
@@ -750,8 +761,8 @@ externally with `attach` when the `path` field is not specified.
 * `path` - (Optional) When using `attach`, this parameter controls the path of
   a virtual disk to attach externally. Otherwise, it is a computed attribute
   that contains the virtual disk's current filename.
-* `keep_on_remove` - (Optional) Keep this disk when removing the sub-resource
-  or destroying the virtual machine. Default: `false`.
+* `keep_on_remove` - (Optional) Keep this disk when removing the device or
+  destroying the virtual machine. Default: `false`.
 * `disk_mode` - (Optional) The mode of this this virtual disk for purposes of
   writes and snapshotting. Can be one of `append`, `independent_nonpersistent`,
   `independent_persistent`, `nonpersistent`, `persistent`, or `undoable`.
@@ -795,7 +806,7 @@ externally with `attach` when the `path` field is not specified.
 The `eagerly_scrub` and `thin_provisioned` options control the space allocation
 type of a virtual disk. These show up in the vSphere console as a unified
 enumeration of options, the equivalents of which are explained below. The
-defaults in the sub-resource are the equivalent of thin provisioning.
+defaults in Terraform are the equivalent of thin provisioning.
 
 * **Thick provisioned lazy zeroed:** Both `eagerly_scrub` and
   `thin_provisioned` should be set to `false`.
@@ -820,7 +831,7 @@ until the settings are corrected.
 ### Network interface options
 
 Network interfaces are managed by adding an instance of the `network_interface`
-sub-resource.
+block.
 
 Interfaces are assigned to devices in the specific order they are declared.
 This has different implications for different operating systems.
@@ -902,12 +913,12 @@ and path (for a datastore ISO backed CDROM) are required.
 ~> **NOTE:** Some CDROM drive types are currently unsupported by this resource,
 such as pass-through devices. If these drives are present in a cloned template,
 or added outside of Terraform, they will have their configurations corrected to
-that of the defined device, or removed if no `cdrom` sub-resource is present.
+that of the defined device, or removed if no `cdrom` block is present.
 
 ### Virtual device computed options
 
-Virtual device resources (`disk`, `network_interface`, and `cdrom`) all export
-the following attributes. These options help locate the sub-resource on future
+Configured virtual devices (`disk`, `network_interface`, and `cdrom`) all
+export the following attributes. These options help locate the device on future
 Terraform runs. The options are:
 
 * `key` - The ID of the device within the virtual machine.
@@ -918,10 +929,10 @@ Terraform runs. The options are:
 
 ## Creating a Virtual Machine from a Template
 
-The `clone` sub-resource can be used to create a new virtual machine from an
-existing virtual machine or template. The resource supports both making a
-complete copy of a virtual machine, or cloning from a snapshot (otherwise known
-as a linked clone).
+The `clone` block can be used to create a new virtual machine from an existing
+virtual machine or template. The resource supports both making a complete copy
+of a virtual machine, or cloning from a snapshot (otherwise known as a linked
+clone).
 
 See the [cloning and customization
 example](#cloning-and-customization-example) for a usage synopsis.
@@ -932,7 +943,7 @@ resource.
 ~> **NOTE:** Cloning requires vCenter and is not supported on direct ESXi
 connections.
 
-The options available in the `clone` sub-resource are:
+The options available in the `clone` block are:
 
 * `template_uuid` - (Required) The UUID of the source virtual machine or
   template.
@@ -954,8 +965,8 @@ settings.
 [vmware-docs-customize]: https://docs.vmware.com/en/VMware-vSphere/6.5/com.vmware.vsphere.vm_admin.doc/GUID-58E346FF-83AE-42B8-BE58-253641D257BC.html
 
 To perform virtual machine customization as a part of the clone process,
-specify the `customize` sub-resource within the `clone` sub-resource with the
-respective customization options.  See the [cloning and customization
+specify the `customize` block with the respective customization options, nested
+within the `clone` block. See the [cloning and customization
 example](#cloning-and-customization-example) for a usage synopsis.
 
 The settings for `customize` are as follows:
@@ -968,10 +979,11 @@ The settings for `customize` are as follows:
 
 #### Network interface settings
 
-The following settings should be in a `network_interface` block in the
-`customize` sub-resource. These settings configure network interfaces on a
-per-interface basis and are matched up to `network_interface` sub-resources in
-the main block in the order they are declared.
+These settings, which should be specified in nested `network_interface` blocks
+within [`customize`](#virtual-machine-customization), configure network
+interfaces on a per-interface basis and are matched up to
+[`network_interface`](#network-interface-options) devices in the order they are
+declared.
 
 Given the following example:
 
@@ -1044,11 +1056,11 @@ resource "vsphere_virtual_machine" "vm" {
 The options are:
 
 * `dns_server_list` - (Optional) Network interface-specific DNS server settings
-  for Windows operating systems. Ignored on Linux and possibly other opearating
+  for Windows operating systems. Ignored on Linux and possibly other operating
   systems - for those systems, please see the [global DNS
   settings](#global-dns-settings) section.
 * `dns_domain` - (Optional) Network interface-specific DNS search domain for
-  Windows operating systems. Ignored on Linux and possibly other opearating
+  Windows operating systems. Ignored on Linux and possibly other operating
   systems - for those systems, please see the [global DNS
   settings](#global-dns-settings) section.
 * `ipv4_address` - (Optional) The IPv4 address assigned to this network adapter. If left
@@ -1098,7 +1110,7 @@ settings](#network-interface-settings).
 
 #### Linux customization options
 
-The settings in the `linux_options` sub-resource pertain to Linux guest OS
+The settings in the `linux_options` block pertain to Linux guest OS
 customization. If you are customizing a Linux operating system, this section
 must be included.
 
@@ -1138,7 +1150,7 @@ The options are:
 
 #### Windows customization options
 
-The settings in the `windows_options` sub-resource pertain to Windows guest OS
+The settings in the `windows_options` block pertain to Windows guest OS
 customization. If you are customizing a Windows operating system, this section
 must be included.
 
@@ -1197,7 +1209,8 @@ text - keep this in mind when provisioning your infrastructure.
 * `product_key` - (Optional) The product key for this virtual machine. The
   default is no key.
 * `run_once_command_list` - (Optional) A list of commands to run at first user
-  logon, after guest customization.
+  logon, after guest customization. Each command is limited by the API to 260
+  characters.
 * `auto_logon` - (Optional) Specifies whether or not the VM automatically logs
   on as Administrator. Default: `false`.
 * `auto_logon_count` - (Optional) Specifies how many times the VM should auto-logon
@@ -1239,11 +1252,11 @@ included if the other is specified.
 ### Using vApp properties to supply OVF/OVA configuration
 
 Alternative to the settings in `customize`, one can use the settings in the
-`properties` section of the `vapp` sub-resource to supply configuration
-parameters to a virtual machine cloned from a template that came from an
-imported OVF or OVA file. Both GuestInfo and ISO transport methods are
-supported. For templates that use ISO transport, a CDROM backed by client
-device is required. See [CDROM options](#cdrom-options) for details. 
+`properties` section of the `vapp` block to supply configuration parameters to
+a virtual machine cloned from a template that came from an imported OVF or OVA
+file. Both GuestInfo and ISO transport methods are supported. For templates
+that use ISO transport, a CDROM backed by client device is required. See [CDROM
+options](#cdrom-options) for details. 
 
 ~> **NOTE:** The only supported usage path for vApp properties is for existing
 user-configurable keys. These generally come from an existing template that was
@@ -1263,12 +1276,7 @@ resource "vsphere_virtual_machine" "vm" {
 
   vapp {
     properties {
-      "guestinfo.hostname"                        = "${var.vm_name}.foobar.local"
-      "guestinfo.interface.0.name"                = "ens192"
-      "guestinfo.interface.0.ip.0.address"        = "10.0.0.100/24"
-      "guestinfo.interface.0.route.0.gateway"     = "10.0.0.1"
-      "guestinfo.interface.0.route.0.destination" = "0.0.0.0/0"
-      "guestinfo.dns.server.0"                    = "10.0.0.10"
+      "guestinfo.tf.internal.id" = "42"
     }
   }
 }
@@ -1281,10 +1289,9 @@ both the resource configuration and source template:
 
 * The virtual machine must not be powered on at the time of cloning.
 * All disks on the virtual machine must be SCSI disks.
-* You must specify at least the same number of `disk` sub-resources as there
-  are disks that exist in the template. These sub-resources are ordered and
-  lined up by the `unit_number` attribute. Additional disks can be added past
-  this.
+* You must specify at least the same number of `disk` devices as there are
+  disks that exist in the template. These devices are ordered and lined up by
+  the `unit_number` attribute. Additional disks can be added past this.
 * The `size` of a virtual disk must be at least the same size as its
   counterpart disk in the template.
 * When using `linked_clone`, the `size`, `thin_provisioned`, and
@@ -1343,8 +1350,8 @@ Storage migration can be done on two levels:
   `datastore_cluster_id` is in use, any disks that drift to datastores outside
   of the datastore cluster via such actions as manual modification will be
   migrated back to the datastore cluster on the next apply.
-* An individual `disk` sub-resource can be migrated by manually specifying the
-  `datastore_id` in its sub-resource. This also pins it to the specific
+* An individual `disk` device can be migrated by manually specifying the
+  `datastore_id` in its configuration block. This also pins it to the specific
   datastore that is specified - if at a later time the VM and any unpinned
   disks migrate to another host, the disk will stay on the specified datastore.
 
@@ -1473,11 +1480,11 @@ comprising of:
 * The [`imported`](#imported) flag will transition from `true` to `false`.
 * [`keep_on_remove`](#keep_on_remove) of known disks will transition from
   `true` to `false`. 
-* Configuration for the [`clone`](#clone) sub-resource block, if supplied, will
-  be persisted to state. This initial persistence operation does not perform
-  any cloning or customization actions, nor does it force a new resource. After
-  the first apply operation, further changes to `clone` will force a new
-  resource as per normal operation.
+* Configuration supplied in the [`clone`](#clone) block, if present, will be
+  persisted to state. This initial persistence operation does not perform any
+  cloning or customization actions, nor does it force a new resource. After the
+  first apply operation, further changes to `clone` will force a new resource
+  as per normal operation.
 
 ~> **NOTE:** Further to the above, do not make any configuration changes to
 `clone` after importing or upgrading from a legacy version of the provider

@@ -2,11 +2,9 @@ package vsphere
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"reflect"
 
-	"github.com/hashicorp/terraform/helper/logging"
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/hashicorp/terraform/helper/validation"
 	"github.com/hashicorp/terraform/terraform"
@@ -253,7 +251,7 @@ func schemaVirtualMachineConfigSpec() map[string]*schema.Schema {
 		"extra_config": {
 			Type:        schema.TypeMap,
 			Optional:    true,
-			Description: "Extra configuration data for this virtual machine. Can be used to supply advanced parameters not normally in configuration, such as data for cloud-config (under the guestinfo namespace), or configuration data for OVF images.",
+			Description: "Extra configuration data for this virtual machine. Can be used to supply advanced parameters not normally in configuration, such as instance metadata, or configuration data for OVF images.",
 		},
 		"vapp": {
 			Type:        schema.TypeList,
@@ -293,7 +291,7 @@ func vAppSubresourceSchema() map[string]*schema.Schema {
 			Type:        schema.TypeMap,
 			Optional:    true,
 			Description: "A map of customizable vApp properties and their values. Allows customization of VMs cloned from OVF templates which have customizable vApp properties.",
-			Elem:        schema.TypeString,
+			Elem:        &schema.Schema{Type: schema.TypeString},
 		},
 	}
 }
@@ -431,8 +429,8 @@ func expandVirtualMachineResourceAllocation(d *schema.ResourceData, key string) 
 	reservationKey := fmt.Sprintf("%s_reservation", key)
 
 	obj := &types.ResourceAllocationInfo{
-		Limit:       structure.GetInt64Ptr(d, limitKey),
-		Reservation: structure.GetInt64Ptr(d, reservationKey),
+		Limit:       structure.GetInt64PtrEmptyZero(d, limitKey),
+		Reservation: structure.GetInt64PtrEmptyZero(d, reservationKey),
 	}
 	shares := &types.SharesInfo{
 		Level:  types.SharesLevel(d.Get(shareLevelKey).(string)),
@@ -454,6 +452,10 @@ func expandLatencySensitivity(d *schema.ResourceData) *types.LatencySensitivity 
 // flattenLatencySensitivity reads various fields from a LatencySensitivity and
 // sets appropriate keys in the supplied ResourceData.
 func flattenLatencySensitivity(d *schema.ResourceData, obj *types.LatencySensitivity) error {
+	if obj == nil {
+		log.Printf("[WARN] Unable to read LatencySensitivity, skipping")
+		return nil
+	}
 	return d.Set("latency_sensitivity", obj.Level)
 }
 
@@ -616,27 +618,35 @@ func expandVAppConfig(d *schema.ResourceData, client *govmomi.Client) (*types.Vm
 	allProperties := vmProps.Config.VAppConfig.GetVmConfigInfo().Property
 
 	for _, p := range allProperties {
-		defaultValue := " "
-		if p.DefaultValue != "" {
-			defaultValue = p.DefaultValue
-		}
-		prop := types.VAppPropertySpec{
-			ArrayUpdateSpec: types.ArrayUpdateSpec{
-				Operation: types.ArrayUpdateOperationEdit,
-			},
-			Info: &types.VAppPropertyInfo{
-				Key:   p.Key,
-				Id:    p.Id,
-				Value: defaultValue,
-			},
-		}
+		if *p.UserConfigurable == true {
+			defaultValue := " "
+			if p.DefaultValue != "" {
+				defaultValue = p.DefaultValue
+			}
+			prop := types.VAppPropertySpec{
+				ArrayUpdateSpec: types.ArrayUpdateSpec{
+					Operation: types.ArrayUpdateOperationEdit,
+				},
+				Info: &types.VAppPropertyInfo{
+					Key:              p.Key,
+					Id:               p.Id,
+					Value:            defaultValue,
+					UserConfigurable: p.UserConfigurable,
+				},
+			}
 
-		newValue, ok := newMap[p.Id]
-		if ok {
-			prop.Info.Value = newValue.(string)
-			delete(newMap, p.Id)
+			newValue, ok := newMap[p.Id]
+			if ok {
+				prop.Info.Value = newValue.(string)
+				delete(newMap, p.Id)
+			}
+			props = append(props, prop)
+		} else {
+			_, ok := newMap[p.Id]
+			if ok {
+				return nil, fmt.Errorf("vApp property with userConfigurable=false specified in vapp.properties: %+v", reflect.ValueOf(newMap).MapKeys())
+			}
 		}
-		props = append(props, prop)
 	}
 
 	if len(newMap) > 0 {
@@ -665,8 +675,10 @@ func flattenVAppConfig(d *schema.ResourceData, config types.BaseVmConfigInfo) er
 	}
 	vac := make(map[string]interface{})
 	for _, v := range props {
-		if v.Value != "" && v.Value != v.DefaultValue {
-			vac[v.Id] = v.Value
+		if *v.UserConfigurable == true {
+			if v.Value != "" && v.Value != v.DefaultValue {
+				vac[v.Id] = v.Value
+			}
 		}
 	}
 	// Only set if properties exist to prevent creating an unnecessary diff
@@ -749,28 +761,29 @@ func expandVirtualMachineConfigSpec(d *schema.ResourceData, client *govmomi.Clie
 	}
 
 	obj := types.VirtualMachineConfigSpec{
-		Name:                d.Get("name").(string),
-		GuestId:             getWithRestart(d, "guest_id").(string),
-		AlternateGuestName:  getWithRestart(d, "alternate_guest_name").(string),
-		Annotation:          d.Get("annotation").(string),
-		Tools:               expandToolsConfigInfo(d),
-		Flags:               expandVirtualMachineFlagInfo(d),
-		NumCPUs:             expandCPUCountConfig(d),
-		NumCoresPerSocket:   int32(getWithRestart(d, "num_cores_per_socket").(int)),
-		MemoryMB:            expandMemorySizeConfig(d),
-		MemoryHotAddEnabled: getBoolWithRestart(d, "memory_hot_add_enabled"),
-		CpuHotAddEnabled:    getBoolWithRestart(d, "cpu_hot_add_enabled"),
-		CpuHotRemoveEnabled: getBoolWithRestart(d, "cpu_hot_remove_enabled"),
-		CpuAllocation:       expandVirtualMachineResourceAllocation(d, "cpu"),
-		MemoryAllocation:    expandVirtualMachineResourceAllocation(d, "memory"),
-		ExtraConfig:         expandExtraConfig(d),
-		SwapPlacement:       getWithRestart(d, "swap_placement_policy").(string),
-		BootOptions:         expandVirtualMachineBootOptions(d, client),
-		VAppConfig:          vappConfig,
-		Firmware:            getWithRestart(d, "firmware").(string),
-		NestedHVEnabled:     getBoolWithRestart(d, "nested_hv_enabled"),
-		VPMCEnabled:         getBoolWithRestart(d, "cpu_performance_counters_enabled"),
-		LatencySensitivity:  expandLatencySensitivity(d),
+		Name:                         d.Get("name").(string),
+		GuestId:                      getWithRestart(d, "guest_id").(string),
+		AlternateGuestName:           getWithRestart(d, "alternate_guest_name").(string),
+		Annotation:                   d.Get("annotation").(string),
+		Tools:                        expandToolsConfigInfo(d),
+		Flags:                        expandVirtualMachineFlagInfo(d),
+		NumCPUs:                      expandCPUCountConfig(d),
+		NumCoresPerSocket:            int32(getWithRestart(d, "num_cores_per_socket").(int)),
+		MemoryMB:                     expandMemorySizeConfig(d),
+		MemoryHotAddEnabled:          getBoolWithRestart(d, "memory_hot_add_enabled"),
+		CpuHotAddEnabled:             getBoolWithRestart(d, "cpu_hot_add_enabled"),
+		CpuHotRemoveEnabled:          getBoolWithRestart(d, "cpu_hot_remove_enabled"),
+		CpuAllocation:                expandVirtualMachineResourceAllocation(d, "cpu"),
+		MemoryAllocation:             expandVirtualMachineResourceAllocation(d, "memory"),
+		MemoryReservationLockedToMax: getMemoryReservationLockedToMax(d),
+		ExtraConfig:                  expandExtraConfig(d),
+		SwapPlacement:                getWithRestart(d, "swap_placement_policy").(string),
+		BootOptions:                  expandVirtualMachineBootOptions(d, client),
+		VAppConfig:                   vappConfig,
+		Firmware:                     getWithRestart(d, "firmware").(string),
+		NestedHVEnabled:              getBoolWithRestart(d, "nested_hv_enabled"),
+		VPMCEnabled:                  getBoolWithRestart(d, "cpu_performance_counters_enabled"),
+		LatencySensitivity:           expandLatencySensitivity(d),
 	}
 
 	return obj, nil
@@ -842,15 +855,13 @@ func expandVirtualMachineConfigSpecChanged(d *schema.ResourceData, client *govmo
 	// Read state back in. This is necessary to ensure GetChange calls work
 	// correctly.
 	oldData = resourceVSphereVirtualMachine().Data(oldData.State())
-	// Get both specs. Silence the logging for oldSpec to suppress fake
-	// reboot_required log messages.
-	log.SetOutput(ioutil.Discard)
+	// Get both specs.
+	log.Printf("[DEBUG] %s: Expanding old config. Ignore reboot_required messages", resourceVSphereVirtualMachineIDString(d))
 	oldSpec, err := expandVirtualMachineConfigSpec(oldData, client)
 	if err != nil {
 		return types.VirtualMachineConfigSpec{}, false, err
 	}
-
-	logging.SetOutput()
+	log.Printf("[DEBUG] %s: Expanding of old config complete", resourceVSphereVirtualMachineIDString(d))
 
 	newSpec, err := expandVirtualMachineConfigSpec(d, client)
 	if err != nil {
@@ -859,4 +870,18 @@ func expandVirtualMachineConfigSpecChanged(d *schema.ResourceData, client *govmo
 
 	// Return the new spec and compare
 	return newSpec, !reflect.DeepEqual(oldSpec, newSpec), nil
+}
+
+// getMemoryReservationLockedToMax determines if the memory_reservation is not
+// set to be equal to memory. If they are not equal, then the memory
+// reservation needs to be unlocked from the maximum. Rather than supporting
+// the locking reservation to max option, we can set memory_reservation to
+// memory in the configuration. Not supporting the option causes problems when
+// cloning from a template that has it enabled. The solution is to set it to
+// false when needed, but leave it alone when the change is not necessary.
+func getMemoryReservationLockedToMax(d *schema.ResourceData) *bool {
+	if d.Get("memory_reservation").(int) != d.Get("memory").(int) {
+		return structure.BoolPtr(false)
+	}
+	return nil
 }

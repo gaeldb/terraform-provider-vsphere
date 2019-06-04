@@ -1,14 +1,115 @@
-## 1.7.0 (Unreleased)
+## 1.11.1 (Unreleased)
+
+BUG FIXES:
+* `resource/virtual_machine`: Only set vApp properties that are
+  UserConfigurable. ([#751](https://github.com/terraform-providers/terraform-provider-vsphere/pull/751))
+
+## 1.11.0 (May 09, 2019)
+
+IMPROVEMENTS:
+
+* Add support for importing datacenters. ([#737](https://github.com/terraform-providers/terraform-provider-vsphere/pull/737))
+* Document max character limit on `run_once_command_list`. ([#748](https://github.com/terraform-providers/terraform-provider-vsphere/pull/748))
+* Add missing ENV variable checks for acceptance tests. ([#758](https://github.com/terraform-providers/terraform-provider-vsphere/pull/758))
+* Switch to Terraform 0.12 SDK which is required for Terraform 0.12 support.
+  This is the first release to use the 0.12 SDK required for Terraform 0.12
+  support. Some provider behaviour may have changed as a result of changes made
+  by the new SDK version. ([#760](https://github.com/terraform-providers/terraform-provider-vsphere/pull/760)) 
+
+## 1.10.0 (March 15, 2019)
 
 FEATURES:
+
+* **New Data Source:** `vsphere_folder` ([#709](https://github.com/terraform-providers/terraform-provider-vsphere/pull/709))
+
+IMPROVEMENTS:
+
+* Update tf-vsphere-devrc.mk.example to include all environment variables ([#707](https://github.com/terraform-providers/terraform-provider-vsphere/pull/707))
+* Add Go Modules support ([#705](https://github.com/terraform-providers/terraform-provider-vsphere/pull/705))
+* Fix assorted typos in documentation
+* `resource/virtual_machine`: Add support for using guest.ipAddress for older
+  versions of VM Tools. ([#684](https://github.com/terraform-providers/terraform-provider-vsphere/issues/684))
+
+BUG FIXES:
+
+* `resource/virtual_machine`: Do not set optional `ignored_guest_ips` on read ([#726](https://github.com/terraform-providers/terraform-provider-vsphere/pull/726))
+
+## 1.9.1 (January 10, 2019)
+
+IMPROVEMENTS:
+
+* `resource/virtual_machine`: Increase logging after old config expansion during
+  diff checking ([#661](https://github.com/terraform-providers/terraform-provider-vsphere/issues/661))
+* `resource/virtual_machine`: Unlock `memory_reservation` from maximum when 
+  `memory_reservation` is not equal to `memory`. ([#680](https://github.com/terraform-providers/terraform-provider-vsphere/issues/680))
+
+BUG FIXES:
+
+* `resource/virtual_machine`: Return zero instead of nil for memory allocation
+  and reservation values ([#655](https://github.com/terraform-providers/terraform-provider-vsphere/issues/655))
+* Ignore nil interfaces when converting a slice of interfaces into a slice
+  of strings. ([#666](https://github.com/terraform-providers/terraform-provider-vsphere/issues/666))
+* `resource/virtual_machine`: Use schema for `properties` elem definition in `vapp` schema. ([#678](https://github.com/terraform-providers/terraform-provider-vsphere/issues/678))
+
+## 1.9.0 (October 31, 2018)
+
+FEATURES:
+
+* **New Resource:** `vsphere_vapp_entity` ([#640](https://github.com/terraform-providers/terraform-provider-vsphere/issues/640))
+* `resource/host_virtual_switch`: Add support for importing ([#625](https://github.com/terraform-providers/terraform-provider-vsphere/issues/625))
+
+IMPROVEMENTS:
+
+* `resource/virtual_disk`: Update existing and add additional tests ([#635](https://github.com/terraform-providers/terraform-provider-vsphere/issues/635))
+
+BUG FIXES:
+
+* `resource/virtual_disk`: Ignore "already exists" errors when creating
+  directories on vSAN. ([#639](https://github.com/terraform-providers/terraform-provider-vsphere/issues/639))
+* Find tag changes when first tag is changed. ([#632](https://github.com/terraform-providers/terraform-provider-vsphere/issues/632))
+* `resource/virtual_machine`: Do not ForceNew when clone `timeout` is changed. ([#631](https://github.com/terraform-providers/terraform-provider-vsphere/issues/631))
+* `resource/virtual_machine_snapshot`: Raise error on snapshot create task
+  error. ([#628](https://github.com/terraform-providers/terraform-provider-vsphere/pull/628))
+
+## 1.8.1 (September 11, 2018)
+
+IMPROVEMENTS:
+
+* `data/vapp_container`: Re-add `data_source_vapp_container`. ([#617](https://github.com/terraform-providers/terraform-provider-vsphere/issues/617))
+
+## 1.8.0 (September 10, 2018)
+
+FEATURES:
+
+* **New Data Source:** `vsphere_vapp_container` ([#610](https://github.com/terraform-providers/terraform-provider-vsphere/issues/610))
+
+BUG FIXES:
+
+* `resource/virtual_machine`: Only relocate after create if `host_system_id` is
+  set and does not match host the VM currently resides on. ([#609](https://github.com/terraform-providers/terraform-provider-vsphere/issues/609))
+* `resource/compute_cluster`: Return empty policy instead of trying to read
+  `nil` variable when `ha_admission_control_policy` is set to `disabled`. ([#611](https://github.com/terraform-providers/terraform-provider-vsphere/issues/611))
+* `resource/virtual_machine`: Skip reading latency sensitivity parameters when
+  LatencySensitivity is `nil`. ([#612](https://github.com/terraform-providers/terraform-provider-vsphere/issues/612))
+* `resource/compute_cluster`: Unset ID when the resource is not found. ([#613](https://github.com/terraform-providers/terraform-provider-vsphere/issues/613))
+* `resource/virtual_machine`: Skip OS specific customization checks when 
+  `resource_pool_id` is not set. ([#614](https://github.com/terraform-providers/terraform-provider-vsphere/issues/614))
+
+## 1.7.0 (August 24, 2018)
+
+FEATURES:
+
 * **New Resource:** `vsphere_vapp_container` ([#566](https://github.com/terraform-providers/terraform-provider-vsphere/issues/566))
 * `resource/vsphere_virtual_machine`: Added support for bus sharing on SCSI
   adapters. ([#574](https://github.com/terraform-providers/terraform-provider-vsphere/issues/574))
 
 IMPROVEMENTS:
+
 * `resource/vsphere_datacenter`: Added `moid` to expose the managed object ID
   because the datacenter's name is currently being used as the `id`.
   ([#575](https://github.com/terraform-providers/terraform-provider-vsphere/issues/575))
+* `resource/vsphere_virtual_machine`: Check if relocation is necessary after
+  creation. ([#583](https://github.com/terraform-providers/terraform-provider-vsphere/issues/583))
 
 BUG FIXES:
 
@@ -17,6 +118,7 @@ BUG FIXES:
 * `resource/vsphere_resource_pool`: The read function is now called at the end
   of resource creation.
   ([#560](https://github.com/terraform-providers/terraform-provider-vsphere/issues/560))
+* Updated govmomi to v0.18. ([#600](https://github.com/terraform-providers/terraform-provider-vsphere/issues/600))
 
 ## 1.6.0 (May 31, 2018)
 

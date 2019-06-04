@@ -41,6 +41,26 @@ func TestAccResourceVSphereComputeCluster_basic(t *testing.T) {
 	})
 }
 
+func TestAccResourceVSphereComputeCluster_haAdmissionControlPolicyDisabled(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccResourceVSphereComputeClusterPreCheck(t)
+		},
+		Providers:    testAccProviders,
+		CheckDestroy: testAccResourceVSphereComputeClusterCheckExists(false),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceVSphereComputeClusterConfigHAAdmissionControlPolicyDisabled(),
+				Check: resource.ComposeTestCheckFunc(
+					testAccResourceVSphereComputeClusterCheckExists(true),
+					testAccResourceVSphereComputeClusterCheckDRSEnabled(false),
+				),
+			},
+		},
+	})
+}
+
 func TestAccResourceVSphereComputeCluster_drsHAEnabled(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -78,7 +98,7 @@ func TestAccResourceVSphereComputeCluster_explicitFailoverHost(t *testing.T) {
 					testAccResourceVSphereComputeClusterCheckDRSEnabled(true),
 					testAccResourceVSphereComputeClusterCheckHAEnabled(true),
 					testAccResourceVSphereComputeClusterCheckAdmissionControlMode(clusterAdmissionControlTypeFailoverHosts),
-					testAccResourceVSphereComputeClusterCheckAdmissionControlFailoverHost(os.Getenv("VSPHERE_ESXI_HOST5")),
+					testAccResourceVSphereComputeClusterCheckAdmissionControlFailoverHost(os.Getenv("VSPHERE_ESXI_HOST4")),
 				),
 			},
 			{
@@ -364,14 +384,11 @@ func testAccResourceVSphereComputeClusterPreCheck(t *testing.T) {
 	if os.Getenv("VSPHERE_DATACENTER") == "" {
 		t.Skip("set VSPHERE_DATACENTER to run vsphere_compute_cluster acceptance tests")
 	}
+	if os.Getenv("VSPHERE_ESXI_HOST4") == "" {
+		t.Skip("set VSPHERE_ESXI_HOST4 to run vsphere_compute_cluster acceptance tests")
+	}
 	if os.Getenv("VSPHERE_ESXI_HOST5") == "" {
 		t.Skip("set VSPHERE_ESXI_HOST5 to run vsphere_compute_cluster acceptance tests")
-	}
-	if os.Getenv("VSPHERE_ESXI_HOST6") == "" {
-		t.Skip("set VSPHERE_ESXI_HOST6 to run vsphere_compute_cluster acceptance tests")
-	}
-	if os.Getenv("VSPHERE_ESXI_HOST7") == "" {
-		t.Skip("set VSPHERE_ESXI_HOST7 to run vsphere_compute_cluster acceptance tests")
 	}
 	if os.Getenv("VSPHERE_NETWORK_LABEL_PXE") == "" {
 		t.Skip("set VSPHERE_NETWORK_LABEL_PXE to run vsphere_virtual_machine acceptance tests")
@@ -576,7 +593,7 @@ resource "vsphere_compute_cluster" "compute_cluster" {
 	)
 }
 
-func testAccResourceVSphereComputeClusterConfigBasic() string {
+func testAccResourceVSphereComputeClusterConfigHAAdmissionControlPolicyDisabled() string {
 	return fmt.Sprintf(`
 variable "datacenter" {
   default = "%s"
@@ -585,6 +602,44 @@ variable "datacenter" {
 variable "hosts" {
   default = [
     "%s",
+    "%s",
+  ]
+}
+
+data "vsphere_datacenter" "dc" {
+  name = "${var.datacenter}"
+}
+
+data "vsphere_host" "hosts" {
+  count         = "${length(var.hosts)}"
+  name          = "${var.hosts[count.index]}"
+  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+}
+
+resource "vsphere_compute_cluster" "compute_cluster" {
+  name                        = "terraform-compute-cluster-test"
+  datacenter_id               = "${data.vsphere_datacenter.dc.id}"
+  host_system_ids             = "${data.vsphere_host.hosts.*.id}"
+  ha_enabled                  = true
+  ha_admission_control_policy = "disabled"
+
+  force_evacuate_on_destroy = true
+}
+`,
+		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_ESXI_HOST4"),
+		os.Getenv("VSPHERE_ESXI_HOST5"),
+	)
+}
+
+func testAccResourceVSphereComputeClusterConfigBasic() string {
+	return fmt.Sprintf(`
+variable "datacenter" {
+  default = "%s"
+}
+
+variable "hosts" {
+  default = [
     "%s",
     "%s",
   ]
@@ -603,15 +658,14 @@ data "vsphere_host" "hosts" {
 resource "vsphere_compute_cluster" "compute_cluster" {
   name            = "terraform-compute-cluster-test"
   datacenter_id   = "${data.vsphere_datacenter.dc.id}"
-  host_system_ids = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids = "${data.vsphere_host.hosts.*.id}"
 
   force_evacuate_on_destroy = true
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_ESXI_HOST4"),
 		os.Getenv("VSPHERE_ESXI_HOST5"),
-		os.Getenv("VSPHERE_ESXI_HOST6"),
-		os.Getenv("VSPHERE_ESXI_HOST7"),
 	)
 }
 
@@ -625,7 +679,6 @@ variable "hosts" {
   default = [
     "%s",
     "%s",
-    "%s",
   ]
 }
 
@@ -642,7 +695,7 @@ data "vsphere_host" "hosts" {
 resource "vsphere_compute_cluster" "compute_cluster" {
   name            = "terraform-compute-cluster-test"
   datacenter_id   = "${data.vsphere_datacenter.dc.id}"
-  host_system_ids = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids = "${data.vsphere_host.hosts.*.id}"
 
   drs_enabled          = true
   drs_automation_level = "fullyAutomated"
@@ -653,9 +706,8 @@ resource "vsphere_compute_cluster" "compute_cluster" {
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_ESXI_HOST4"),
 		os.Getenv("VSPHERE_ESXI_HOST5"),
-		os.Getenv("VSPHERE_ESXI_HOST6"),
-		os.Getenv("VSPHERE_ESXI_HOST7"),
 	)
 }
 
@@ -669,7 +721,6 @@ variable "hosts" {
   default = [
     "%s",
     "%s",
-    "%s",
   ]
 }
 
@@ -686,22 +737,21 @@ data "vsphere_host" "hosts" {
 resource "vsphere_compute_cluster" "compute_cluster" {
   name            = "terraform-compute-cluster-test"
   datacenter_id   = "${data.vsphere_datacenter.dc.id}"
-  host_system_ids = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids = "${data.vsphere_host.hosts.*.id}"
 
   drs_enabled          = true
   drs_automation_level = "fullyAutomated"
 
   ha_enabled                                    = true
   ha_admission_control_policy                   = "failoverHosts"
-  ha_admission_control_failover_host_system_ids = ["${data.vsphere_host.hosts.0.id}"]
+  ha_admission_control_failover_host_system_ids = "${data.vsphere_host.hosts.*.id}"
 
   force_evacuate_on_destroy = true
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_ESXI_HOST4"),
 		os.Getenv("VSPHERE_ESXI_HOST5"),
-		os.Getenv("VSPHERE_ESXI_HOST6"),
-		os.Getenv("VSPHERE_ESXI_HOST7"),
 	)
 }
 
@@ -834,7 +884,7 @@ resource "vsphere_compute_cluster" "compute_cluster" {
   name          = "terraform-compute-cluster-test"
   datacenter_id = "${data.vsphere_datacenter.dc.id}"
 
-  tags = ["${vsphere_tag.terraform-test-tags-alt.*.id}"]
+  tags = "${vsphere_tag.terraform-test-tags-alt.*.id}"
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
@@ -921,7 +971,6 @@ variable "hosts" {
   default = [
     "%s",
     "%s",
-    "%s",
   ]
 }
 
@@ -956,7 +1005,7 @@ data "vsphere_network" "network" {
 resource "vsphere_compute_cluster" "compute_cluster" {
   name            = "terraform-compute-cluster-test"
   datacenter_id   = "${data.vsphere_datacenter.dc.id}"
-  host_system_ids = ["${data.vsphere_host.hosts.*.id}"]
+  host_system_ids = "${data.vsphere_host.hosts.*.id}"
 
   drs_enabled          = true
   drs_automation_level = "fullyAutomated"
@@ -986,9 +1035,8 @@ resource "vsphere_virtual_machine" "vm" {
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_ESXI_HOST4"),
 		os.Getenv("VSPHERE_ESXI_HOST5"),
-		os.Getenv("VSPHERE_ESXI_HOST6"),
-		os.Getenv("VSPHERE_ESXI_HOST7"),
 		os.Getenv("VSPHERE_NETWORK_LABEL_PXE"),
 		os.Getenv("VSPHERE_DATASTORE"),
 	)

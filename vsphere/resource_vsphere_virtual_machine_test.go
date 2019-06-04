@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	testAccResourceVSphereVirtualMachineDiskNameEager       = "terraform-test_1.vmdk"
-	testAccResourceVSphereVirtualMachineDiskNameLazy        = "terraform-test_2.vmdk"
-	testAccResourceVSphereVirtualMachineDiskNameThin        = "terraform-test_3.vmdk"
+	testAccResourceVSphereVirtualMachineDiskNameEager       = "terraform-test.vmdk"
+	testAccResourceVSphereVirtualMachineDiskNameLazy        = "terraform-test_1.vmdk"
+	testAccResourceVSphereVirtualMachineDiskNameThin        = "terraform-test_2.vmdk"
 	testAccResourceVSphereVirtualMachineDiskNameExtraVmdk   = "terraform-test-vm-extra-disk.vmdk"
 	testAccResourceVSphereVirtualMachineStaticMacAddr       = "06:5c:89:2b:a0:64"
 	testAccResourceVSphereVirtualMachineAnnotation          = "Managed by Terraform"
@@ -111,12 +111,10 @@ func TestAccResourceVSphereVirtualMachine_datastoreClusterCreateMultiDisk(t *tes
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						0, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test_1.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						1, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 				),
 			},
@@ -144,12 +142,10 @@ func TestAccResourceVSphereVirtualMachine_datastoreClusterCreateUpdate(t *testin
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						0, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test_1.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						1, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 				),
 			},
@@ -1446,6 +1442,25 @@ func TestAccResourceVSphereVirtualMachine_cloneNoGateway(t *testing.T) {
 	})
 }
 
+func TestAccResourceVSphereVirtualMachine_cloneCustomizeWithNewResourcePool(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccResourceVSphereVirtualMachinePreCheck(t)
+		},
+		Providers:    testAccProviders,
+		CheckDestroy: testAccResourceVSphereVirtualMachineCheckExists(false),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceVSphereVirtualMachineConfigCloneWithNewResourcePool(),
+				Check: resource.ComposeTestCheckFunc(
+					testAccResourceVSphereVirtualMachineCheckExists(true),
+				),
+			},
+		},
+	})
+}
+
 func TestAccResourceVSphereVirtualMachine_cloneCustomizeForceNew(t *testing.T) {
 	var state *terraform.State
 
@@ -1500,7 +1515,7 @@ func TestAccResourceVSphereVirtualMachine_cloneCustomizeForceNewWithDatastore(t 
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckHostname("terraform-test"),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 			{
@@ -1512,7 +1527,7 @@ func TestAccResourceVSphereVirtualMachine_cloneCustomizeForceNewWithDatastore(t 
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckHostname("terraform-test-renamed"),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE2")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE2")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE2")),
 					func(s *terraform.State) error {
 						oldID := state.RootModule().Resources["vsphere_virtual_machine.vm"].Primary.ID
 						return testCheckResourceNotAttr("vsphere_virtual_machine.vm", "id", oldID)(s)
@@ -1641,26 +1656,27 @@ func TestAccResourceVSphereVirtualMachine_cloneBlockESXi(t *testing.T) {
 	})
 }
 
-func TestAccResourceVSphereVirtualMachine_cloneWithBadTimezone(t *testing.T) {
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() {
-			testAccPreCheck(t)
-			testAccResourceVSphereVirtualMachinePreCheck(t)
-		},
-		Providers: testAccProviders,
-		Steps: []resource.TestStep{
-			{
-				Config:      testAccResourceVSphereVirtualMachineConfigCloneTimeZone("Pacific Standard Time"),
-				ExpectError: regexp.MustCompile("must be similar to America/Los_Angeles or other Linux/Unix TZ format"),
-				PlanOnly:    true,
-			},
-			{
-				Config: testAccResourceVSphereEmpty,
-				Check:  resource.ComposeTestCheckFunc(),
-			},
-		},
-	})
-}
+// Temporarily removed until https://github.com/hashicorp/terraform/issues/21225 is resolved.
+//func TestAccResourceVSphereVirtualMachine_cloneWithBadTimezone(t *testing.T) {
+//	resource.Test(t, resource.TestCase{
+//		PreCheck: func() {
+//			testAccPreCheck(t)
+//			testAccResourceVSphereVirtualMachinePreCheck(t)
+//		},
+//		Providers: testAccProviders,
+//		Steps: []resource.TestStep{
+//			{
+//				Config:      testAccResourceVSphereVirtualMachineConfigCloneTimeZone("Pacific Standard Time"),
+//				ExpectError: regexp.MustCompile("must be similar to America/Los_Angeles or other Linux/Unix TZ format"),
+//				PlanOnly:    true,
+//			},
+//			{
+//				Config: testAccResourceVSphereEmpty,
+//				Check:  resource.ComposeTestCheckFunc(),
+//			},
+//		},
+//	})
+//}
 
 func TestAccResourceVSphereVirtualMachine_cloneWithBadEagerlyScrubWithLinkedClone(t *testing.T) {
 	resource.Test(t, resource.TestCase{
@@ -1683,26 +1699,27 @@ func TestAccResourceVSphereVirtualMachine_cloneWithBadEagerlyScrubWithLinkedClon
 	})
 }
 
-func TestAccResourceVSphereVirtualMachine_cloneWithBadThinProvisionedWithLinkedClone(t *testing.T) {
-	resource.Test(t, resource.TestCase{
-		PreCheck: func() {
-			testAccPreCheck(t)
-			testAccResourceVSphereVirtualMachinePreCheck(t)
-		},
-		Providers: testAccProviders,
-		Steps: []resource.TestStep{
-			{
-				Config:      testAccResourceVSphereVirtualMachineConfigBadThin(),
-				ExpectError: regexp.MustCompile("must have same value for thin_provisioned as source when using linked_clone"),
-				PlanOnly:    true,
-			},
-			{
-				Config: testAccResourceVSphereEmpty,
-				Check:  resource.ComposeTestCheckFunc(),
-			},
-		},
-	})
-}
+// Temporarily removed until https://github.com/hashicorp/terraform/issues/21225 is resolved.
+//func TestAccResourceVSphereVirtualMachine_cloneWithBadThinProvisionedWithLinkedClone(t *testing.T) {
+//	resource.Test(t, resource.TestCase{
+//		PreCheck: func() {
+//			testAccPreCheck(t)
+//			testAccResourceVSphereVirtualMachinePreCheck(t)
+//		},
+//		Providers: testAccProviders,
+//		Steps: []resource.TestStep{
+//			{
+//				Config:      testAccResourceVSphereVirtualMachineConfigBadThin(),
+//				ExpectError: regexp.MustCompile("must have same value for thin_provisioned as source when using linked_clone"),
+//				PlanOnly:    true,
+//			},
+//			{
+//				Config: testAccResourceVSphereEmpty,
+//				Check:  resource.ComposeTestCheckFunc(),
+//			},
+//		},
+//	})
+//}
 
 func TestAccResourceVSphereVirtualMachine_cloneWithBadSizeWithLinkedClone(t *testing.T) {
 	resource.Test(t, resource.TestCase{
@@ -2085,6 +2102,36 @@ func TestAccResourceVSphereVirtualMachine_windowsTemplateCustomizationEventsAndP
 	})
 }
 
+func TestAccResourceVSphereVirtualMachine_hostCheck(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			testAccResourceVSphereVirtualMachinePreCheck(t)
+		},
+		Providers:    testAccProviders,
+		CheckDestroy: testAccResourceVSphereVirtualMachineCheckExists(false),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccResourceVSphereVirtualMachineConfigHostCheck(os.Getenv("VSPHERE_ESXI_HOST")),
+				Check: resource.ComposeTestCheckFunc(
+					testAccResourceVSphereVirtualMachineCheckExists(true),
+					testAccResourceVSphereVirtualMachineCheckHost(os.Getenv("VSPHERE_ESXI_HOST")),
+				),
+			},
+			{
+				Config: testAccResourceVSphereEmpty,
+			},
+			{
+				Config: testAccResourceVSphereVirtualMachineConfigHostCheck(os.Getenv("VSPHERE_ESXI_HOST2")),
+				Check: resource.ComposeTestCheckFunc(
+					testAccResourceVSphereVirtualMachineCheckExists(true),
+					testAccResourceVSphereVirtualMachineCheckHost(os.Getenv("VSPHERE_ESXI_HOST2")),
+				),
+			},
+		},
+	})
+}
+
 func TestAccResourceVSphereVirtualMachine_hostVMotion(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -2156,10 +2203,10 @@ func TestAccResourceVSphereVirtualMachine_clusterVMotion(t *testing.T) {
 				),
 			},
 			{
-				Config: testAccResourceVSphereVirtualMachineConfigResourcePoolVMotion(fmt.Sprintf("%s/Resources", os.Getenv("VSPHERE_CLUSTER2"))),
+				Config: testAccResourceVSphereVirtualMachineConfigResourcePoolVMotion(fmt.Sprintf("%s/Resources", os.Getenv("VSPHERE_ESXI_HOST5"))),
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
-					testAccResourceVSphereVirtualMachineCheckResourcePool(fmt.Sprintf("%s/Resources", os.Getenv("VSPHERE_CLUSTER2"))),
+					testAccResourceVSphereVirtualMachineCheckResourcePool(fmt.Sprintf("%s/Resources", os.Getenv("VSPHERE_ESXI_HOST5"))),
 				),
 			},
 		},
@@ -2180,7 +2227,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionGlobalSetting(t *testing
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 			{
@@ -2188,7 +2235,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionGlobalSetting(t *testing
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE2")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE2")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE2")),
 				),
 			},
 		},
@@ -2209,8 +2256,8 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionSingleDisk(t *testing.T)
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test_1.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(1, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 			{
@@ -2218,8 +2265,8 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionSingleDisk(t *testing.T)
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test_1.vmdk", os.Getenv("VSPHERE_DATASTORE2")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(1, os.Getenv("VSPHERE_DATASTORE2")),
 				),
 			},
 		},
@@ -2240,8 +2287,8 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionPinDatastore(t *testing.
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test_1.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(1, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 			{
@@ -2249,8 +2296,8 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionPinDatastore(t *testing.
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE2")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE2")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test_1.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE2")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(1, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 		},
@@ -2271,7 +2318,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionRenamedVirtualMachine(t 
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 			{
@@ -2279,7 +2326,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionRenamedVirtualMachine(t 
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 			{
@@ -2287,7 +2334,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionRenamedVirtualMachine(t 
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE2")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("foobar-test.vmdk", os.Getenv("VSPHERE_DATASTORE2")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE2")),
 				),
 			},
 		},
@@ -2310,7 +2357,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionLinkedClones(t *testing.
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 			{
@@ -2320,8 +2367,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionLinkedClones(t *testing.
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE2")),
 					func(s *terraform.State) error {
-						filename := path.Base(state.RootModule().Resources["vsphere_virtual_machine.vm"].Primary.Attributes["disk.0.path"])
-						return testAccResourceVSphereVirtualMachineCheckVmdkDatastore(filename, os.Getenv("VSPHERE_DATASTORE2"))(s)
+						return testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE2"))(s)
 					},
 				),
 			},
@@ -2343,7 +2389,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionBlockExternallyAttachedD
 				Check: resource.ComposeTestCheckFunc(
 					testAccResourceVSphereVirtualMachineCheckExists(true),
 					testAccResourceVSphereVirtualMachineCheckVmxDatastore(os.Getenv("VSPHERE_DATASTORE")),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(0, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 			{
@@ -2375,8 +2421,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionDatastoreCluster(t *test
 						testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						0, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 				),
 			},
@@ -2390,8 +2435,7 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionDatastoreCluster(t *test
 						testAccResourceVSphereVirtualMachineDatastoreClusterAlt,
 					),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreClusterAlt,
+						0, testAccResourceVSphereVirtualMachineDatastoreClusterAlt,
 					),
 				),
 			},
@@ -2443,12 +2487,10 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionDatastoreClusterSingleDi
 						testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						0, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test_1.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						1, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 				),
 			},
@@ -2462,10 +2504,9 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionDatastoreClusterSingleDi
 						testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						0, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
-					testAccResourceVSphereVirtualMachineCheckVmdkDatastore("terraform-test_1.vmdk", os.Getenv("VSPHERE_DATASTORE")),
+					testAccResourceVSphereVirtualMachineCheckVmdkDatastore(1, os.Getenv("VSPHERE_DATASTORE")),
 				),
 			},
 			{
@@ -2476,12 +2517,10 @@ func TestAccResourceVSphereVirtualMachine_storageVMotionDatastoreClusterSingleDi
 						testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						0, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 					testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(
-						"terraform-test_1.vmdk",
-						testAccResourceVSphereVirtualMachineDatastoreCluster,
+						1, testAccResourceVSphereVirtualMachineDatastoreCluster,
 					),
 				),
 			},
@@ -2801,7 +2840,6 @@ func TestAccResourceVSphereVirtualMachine_importClone(t *testing.T) {
 						return nil
 					},
 				),
-				ExpectNonEmptyPlan: true,
 			},
 			{
 				Config: testAccResourceVSphereVirtualMachineConfigClone(),
@@ -2822,9 +2860,6 @@ func testAccResourceVSphereVirtualMachinePreCheck(t *testing.T) {
 	}
 	if os.Getenv("VSPHERE_CLUSTER") == "" {
 		t.Skip("set VSPHERE_CLUSTER to run vsphere_virtual_machine acceptance tests")
-	}
-	if os.Getenv("VSPHERE_CLUSTER2") == "" {
-		t.Skip("set VSPHERE_CLUSTER2 to run vsphere_virtual_machine acceptance tests")
 	}
 	if os.Getenv("VSPHERE_RESOURCE_POOL") == "" {
 		t.Skip("set VSPHERE_RESOURCE_POOL to run vsphere_virtual_machine acceptance tests")
@@ -3657,12 +3692,17 @@ func testAccResourceVSphereVirtualMachineCheckVmxDatastore(expected string) reso
 
 // testAccResourceVSphereVirtualMachineCheckVmdkDatastore checks the datastore
 // that a specific VMDK file is in.
-func testAccResourceVSphereVirtualMachineCheckVmdkDatastore(name, expected string) resource.TestCheckFunc {
+func testAccResourceVSphereVirtualMachineCheckVmdkDatastore(diskIndex int, expected string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
+		tVars, err := testClientVariablesForResource(s, "vsphere_virtual_machine.vm")
+		if err != nil {
+			return err
+		}
 		props, err := testGetVirtualMachineProperties(s, "vm")
 		if err != nil {
 			return err
 		}
+		name := tVars.resourceAttributes[fmt.Sprintf("disk.%d.path", diskIndex)]
 		for _, dev := range props.Config.Hardware.Device {
 			if disk, ok := dev.(*types.VirtualDisk); ok {
 				if info, ok := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
@@ -3670,7 +3710,7 @@ func testAccResourceVSphereVirtualMachineCheckVmdkDatastore(name, expected strin
 					if ok := dsPath.FromString(info.FileName); !ok {
 						return fmt.Errorf("could not parse datastore path %q", info.FileName)
 					}
-					if path.Base(dsPath.Path) == name {
+					if dsPath.Path == name {
 						actual := dsPath.Datastore
 						if expected == actual {
 							return nil
@@ -3728,7 +3768,7 @@ func testAccResourceVSphereVirtualMachineCheckVmxDatastoreCluster(expected strin
 
 // testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster checks the
 // datastore cluster that a specific VMDK file is in.
-func testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(name, expected string) resource.TestCheckFunc {
+func testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(diskIndex int, expected string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		tVars, err := testClientVariablesForResource(s, "vsphere_virtual_machine.vm")
 		if err != nil {
@@ -3738,6 +3778,7 @@ func testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(name, expecte
 		if err != nil {
 			return err
 		}
+		name := tVars.resourceAttributes[fmt.Sprintf("disk.%d.path", diskIndex)]
 		for _, dev := range props.Config.Hardware.Device {
 			if disk, ok := dev.(*types.VirtualDisk); ok {
 				if info, ok := disk.Backing.(*types.VirtualDiskFlatVer2BackingInfo); ok {
@@ -3745,7 +3786,7 @@ func testAccResourceVSphereVirtualMachineCheckVmdkDatastoreCluster(name, expecte
 					if ok := dsPath.FromString(info.FileName); !ok {
 						return fmt.Errorf("could not parse datastore path %q", info.FileName)
 					}
-					if path.Base(dsPath.Path) == name {
+					if dsPath.Path == name {
 						dc, err := getDatacenter(tVars.client, os.Getenv("VSPHERE_DATACENTER"))
 						if err != nil {
 							return fmt.Errorf("could not get datacenter by ID %q: %s", tVars.resourceID, err)
@@ -4049,7 +4090,7 @@ data "vsphere_vmfs_disks" "disk" {
 resource "vsphere_vmfs_datastore" "datastore" {
   name           = "terraform-test-shared-datastore"
   host_system_id = "${data.vsphere_host.host.id}"
-  disks          = ["${data.vsphere_vmfs_disks.disk.disks}"]
+  disks          = "${data.vsphere_vmfs_disks.disk.disks}"
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
@@ -4115,7 +4156,7 @@ data "vsphere_datastore" "ds" {
 resource "vsphere_vmfs_datastore" "datastore" {
   name           = "terraform-test-shared-datastore"
   host_system_id = "${data.vsphere_host.host.id}"
-  disks          = ["${data.vsphere_vmfs_disks.disk.disks}"]
+  disks          = "${data.vsphere_vmfs_disks.disk.disks}"
 }
 
 resource "vsphere_virtual_disk" "disk" {
@@ -5010,9 +5051,9 @@ resource "vsphere_virtual_machine" "vm" {
   }
 
   vapp {
-    properties {
-      "user-data" = "${base64encode(data.template_file.config_data.rendered)}"
-      "hostname"  = "custom-hostname"
+    properties = {
+      user-data = "${base64encode(data.template_file.config_data.rendered)}"
+      hostname  = "custom-hostname"
     }
   }
 
@@ -5144,9 +5185,9 @@ resource "vsphere_virtual_machine" "vm" {
   }
 
   vapp {
-    properties {
-      "user-data" = "${base64encode(data.template_file.config_data.rendered)}"
-      "hostname"  = "custom-hostname"
+    properties = {
+      user-data = "${base64encode(data.template_file.config_data.rendered)}"
+      hostname  = "custom-hostname"
     }
   }
 
@@ -5280,9 +5321,9 @@ resource "vsphere_virtual_machine" "vm" {
   }
 
   vapp {
-    properties {
-      "user-data" = "${base64encode(data.template_file.config_data.rendered)}"
-      "hostname"  = "custom-hostname"
+    properties = {
+      user-data = "${base64encode(data.template_file.config_data.rendered)}"
+      hostname  = "custom-hostname"
     }
   }
 
@@ -6059,8 +6100,8 @@ resource "vsphere_virtual_machine" "vm" {
   memory   = 2048
   guest_id = "other3xLinux64Guest"
 
-  extra_config {
-    "%s" = "%s"
+  extra_config = {
+    %s = "%s"
   }
 
   network_interface {
@@ -6775,7 +6816,7 @@ resource "vsphere_virtual_machine" "vm" {
     size  = 20
   }
 
-  tags = ["${vsphere_tag.terraform-test-tags-alt.*.id}"]
+  tags = "${vsphere_tag.terraform-test-tags-alt.*.id}"
 }
 `,
 		os.Getenv("VSPHERE_DATACENTER"),
@@ -6906,8 +6947,8 @@ resource "vsphere_virtual_machine" "vm" {
   }
 
   vapp {
-    properties {
-      "foo" = "bar"
+    properties = {
+      foo = "bar"
     }
   }
 }
@@ -6979,6 +7020,135 @@ resource "vsphere_virtual_machine" "vm" {
 		os.Getenv("VSPHERE_RESOURCE_POOL"),
 		os.Getenv("VSPHERE_NETWORK_LABEL_PXE"),
 		os.Getenv("VSPHERE_DATASTORE"),
+	)
+}
+
+func testAccResourceVSphereVirtualMachineConfigCloneWithNewResourcePool() string {
+	return fmt.Sprintf(`
+variable "datacenter" {
+  default = "%s"
+}
+
+variable "resource_pool" {
+  default = "%s"
+}
+
+variable "network_label" {
+  default = "%s"
+}
+
+variable "ipv4_address" {
+  default = "%s"
+}
+
+variable "ipv4_netmask" {
+  default = "%s"
+}
+
+variable "ipv4_gateway" {
+  default = "%s"
+}
+
+variable "dns_server" {
+  default = "%s"
+}
+
+variable "datastore" {
+  default = "%s"
+}
+
+variable "template" {
+  default = "%s"
+}
+
+variable "linked_clone" {
+  default = "%s"
+}
+
+data "vsphere_datacenter" "dc" {
+  name = "${var.datacenter}"
+}
+
+data "vsphere_datastore" "datastore" {
+  name          = "${var.datastore}"
+  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+}
+
+data "vsphere_resource_pool" "pool" {
+  name          = "${var.resource_pool}"
+  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+}
+
+data "vsphere_network" "network" {
+  name          = "${var.network_label}"
+  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+}
+
+data "vsphere_virtual_machine" "template" {
+  name          = "${var.template}"
+  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+}
+
+resource "vsphere_resource_pool" "pool" {
+  name                    = "terraform-test-resource-pool"
+  parent_resource_pool_id = "${data.vsphere_resource_pool.pool.id}"
+}
+
+resource "vsphere_virtual_machine" "vm" {
+  name             = "terraform-test"
+  resource_pool_id = "${vsphere_resource_pool.pool.id}"
+  datastore_id     = "${data.vsphere_datastore.datastore.id}"
+
+  num_cpus = 2
+  memory   = 2048
+  guest_id = "${data.vsphere_virtual_machine.template.guest_id}"
+
+  wait_for_guest_net_timeout = -1
+
+  network_interface {
+    network_id   = "${data.vsphere_network.network.id}"
+    adapter_type = "${data.vsphere_virtual_machine.template.network_interface_types[0]}"
+  }
+
+  disk {
+    label            = "disk0"
+    size             = "${data.vsphere_virtual_machine.template.disks.0.size}"
+    eagerly_scrub    = "${data.vsphere_virtual_machine.template.disks.0.eagerly_scrub}"
+    thin_provisioned = "${data.vsphere_virtual_machine.template.disks.0.thin_provisioned}"
+  }
+
+  clone {
+    template_uuid = "${data.vsphere_virtual_machine.template.id}"
+    linked_clone  = "${var.linked_clone != "" ? "true" : "false" }"
+
+    customize {
+      linux_options {
+        host_name = "terraform-test"
+        domain    = "test.internal"
+      }
+
+      network_interface {
+        ipv4_address = "${var.ipv4_address}"
+        ipv4_netmask = "${var.ipv4_netmask}"
+      }
+
+      ipv4_gateway    = "${var.ipv4_gateway}"
+      dns_server_list = ["${var.dns_server}"]
+      dns_suffix_list = ["test.internal"]
+    }
+  }
+}
+`,
+		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_RESOURCE_POOL"),
+		os.Getenv("VSPHERE_NETWORK_LABEL"),
+		os.Getenv("VSPHERE_IPV4_ADDRESS"),
+		os.Getenv("VSPHERE_IPV4_PREFIX"),
+		os.Getenv("VSPHERE_IPV4_GATEWAY"),
+		os.Getenv("VSPHERE_DNS"),
+		os.Getenv("VSPHERE_DATASTORE"),
+		os.Getenv("VSPHERE_TEMPLATE"),
+		os.Getenv("VSPHERE_USE_LINKED_CLONE"),
 	)
 }
 
@@ -7285,7 +7455,7 @@ resource "vsphere_virtual_machine" "vm" {
     label            = "disk0"
     size             = "${data.vsphere_virtual_machine.template.disks.0.size}"
     eagerly_scrub    = "${data.vsphere_virtual_machine.template.disks.0.eagerly_scrub == "true" ? "false" : "true"}"
-    thin_provisioned = "${data.vsphere_virtual_machine.template.disks.0.thin_provisioned}"
+    thin_provisioned = "${data.vsphere_virtual_machine.template.disks.0.thin_provisioned == "true" ? "false" : "true"}"
   }
 
   clone {
@@ -8561,6 +8731,108 @@ resource "vsphere_virtual_machine" "vm" {
 		os.Getenv("VSPHERE_DATASTORE"),
 		os.Getenv("VSPHERE_TEMPLATE"),
 		os.Getenv("VSPHERE_USE_LINKED_CLONE"),
+	)
+}
+
+func testAccResourceVSphereVirtualMachineConfigHostCheck(host string) string {
+	return fmt.Sprintf(`
+variable "datacenter" {
+  default = "%s"
+}
+
+variable "resource_pool" {
+  default = "%s"
+}
+
+variable "network_label" {
+  default = "%s"
+}
+
+variable "ipv4_address" {
+  default = "%s"
+}
+
+variable "ipv4_netmask" {
+  default = "%s"
+}
+
+variable "ipv4_gateway" {
+  default = "%s"
+}
+
+variable "dns_server" {
+  default = "%s"
+}
+
+variable "datastore" {
+  default = "%s"
+}
+
+variable "linked_clone" {
+  default = "%s"
+}
+
+variable "host" {
+  default = "%s"
+}
+
+data "vsphere_datacenter" "dc" {
+  name = "${var.datacenter}"
+}
+
+data "vsphere_datastore" "datastore" {
+  name          = "${var.datastore}"
+  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+}
+
+data "vsphere_resource_pool" "pool" {
+  name          = "${var.resource_pool}"
+  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+}
+
+data "vsphere_host" "host" {
+  name          = "${var.host}"
+  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+}
+
+data "vsphere_network" "network" {
+  name          = "${var.network_label}"
+  datacenter_id = "${data.vsphere_datacenter.dc.id}"
+}
+
+resource "vsphere_virtual_machine" "vm" {
+  name             = "terraform-test"
+  resource_pool_id = "${data.vsphere_resource_pool.pool.id}"
+  host_system_id   = "${data.vsphere_host.host.id}"
+  datastore_id     = "${data.vsphere_datastore.datastore.id}"
+
+  num_cpus                   = 2
+  memory                     = 2048
+  guest_id                   = "ubuntu64Guest"
+  wait_for_guest_net_timeout = -1
+
+  network_interface {
+    network_id = "${data.vsphere_network.network.id}"
+  }
+
+  disk {
+    label            = "disk0"
+    size             = "1"
+    eagerly_scrub    = false
+    thin_provisioned = true
+  }
+}
+`,
+		os.Getenv("VSPHERE_DATACENTER"),
+		os.Getenv("VSPHERE_RESOURCE_POOL"),
+		os.Getenv("VSPHERE_NETWORK_LABEL"),
+		os.Getenv("VSPHERE_IPV4_ADDRESS"),
+		os.Getenv("VSPHERE_IPV4_PREFIX"),
+		os.Getenv("VSPHERE_IPV4_GATEWAY"),
+		os.Getenv("VSPHERE_DNS"),
+		os.Getenv("VSPHERE_DATASTORE"),
+		os.Getenv("VSPHERE_USE_LINKED_CLONE"),
+		host,
 	)
 }
 
@@ -10274,7 +10546,7 @@ resource "vsphere_virtual_machine" "vm" {
   }
 
   vapp {
-    properties {
+		properties = {
       "guestinfo.hostname"                        = "terraform-test.test.internal"
       "guestinfo.interface.0.name"                = "ens192"
       "guestinfo.interface.0.ip.0.address"        = "${var.ipv4_address}/${var.ipv4_netmask}"
@@ -10391,7 +10663,7 @@ resource "vsphere_virtual_machine" "vm" {
   }
 
   vapp {
-    properties {
+    properties = {
       "guestinfo.hostname"                        = "terraform-test.test.internal"
       "guestinfo.interface.0.name"                = "ens192"
       "guestinfo.interface.0.ip.0.address"        = "${var.ipv4_address}/${var.ipv4_netmask}"
@@ -10509,7 +10781,7 @@ resource "vsphere_virtual_machine" "vm" {
   }
 
   vapp {
-    properties {
+    properties = {
       "guestinfo.hostname"                        = "terraform-test.test.internal"
       "guestinfo.interface.0.name"                = "ens192"
       "guestinfo.interface.0.ip.0.address"        = "${var.ipv4_address}/${var.ipv4_netmask}"
@@ -10649,8 +10921,8 @@ resource "vsphere_virtual_machine" "vm" {
   }
 
   vapp {
-    properties {
-      "foo" = "bar"
+    properties = {
+      foo = "bar"
     }
   }
 }
@@ -11265,7 +11537,7 @@ resource "vsphere_datastore_cluster" "datastore_cluster" {
 
 resource "vsphere_nas_datastore" "datastore" {
   name                 = "terraform-test-nas"
-  host_system_ids      = ["${data.vsphere_host.esxi_hosts.*.id}"]
+  host_system_ids      = "${data.vsphere_host.esxi_hosts.*.id}"
   datastore_cluster_id = "${vsphere_datastore_cluster.datastore_cluster.id}"
 
   type         = "NFS"
@@ -11363,7 +11635,7 @@ resource "vsphere_datastore_cluster" "datastore_cluster" {
 
 resource "vsphere_nas_datastore" "datastore" {
   name                 = "terraform-test-nas"
-  host_system_ids      = ["${data.vsphere_host.esxi_hosts.*.id}"]
+  host_system_ids      = "${data.vsphere_host.esxi_hosts.*.id}"
   datastore_cluster_id = "${vsphere_datastore_cluster.datastore_cluster.id}"
 
   type         = "NFS"
@@ -11487,7 +11759,7 @@ resource "vsphere_datastore_cluster" "datastore_cluster" {
 
 resource "vsphere_nas_datastore" "datastore" {
   name                 = "terraform-test-nas"
-  host_system_ids      = ["${data.vsphere_host.esxi_hosts.*.id}"]
+  host_system_ids      = "${data.vsphere_host.esxi_hosts.*.id}"
   datastore_cluster_id = "${vsphere_datastore_cluster.datastore_cluster.id}"
 
   type         = "NFS"
@@ -11642,7 +11914,7 @@ resource "vsphere_datastore_cluster" "%s" {
 
 resource "vsphere_nas_datastore" "datastore" {
   name                 = "terraform-test-nas"
-  host_system_ids      = ["${data.vsphere_host.esxi_hosts.*.id}"]
+  host_system_ids      = "${data.vsphere_host.esxi_hosts.*.id}"
   datastore_cluster_id = "${vsphere_datastore_cluster.%s.id}"
 
   type         = "NFS"
@@ -11658,7 +11930,7 @@ resource "vsphere_datastore_cluster" "%s" {
 
 resource "vsphere_nas_datastore" "datastore2" {
   name                 = "terraform-test-nas2"
-  host_system_ids      = ["${data.vsphere_host.esxi_hosts.*.id}"]
+  host_system_ids      = "${data.vsphere_host.esxi_hosts.*.id}"
   datastore_cluster_id = "${vsphere_datastore_cluster.%s.id}"
 
   type         = "NFS"
@@ -11834,7 +12106,7 @@ resource "vsphere_datastore_cluster" "datastore_cluster" {
 
 resource "vsphere_nas_datastore" "datastore" {
   name                 = "terraform-test-nas"
-  host_system_ids      = ["${data.vsphere_host.mount_hosts.*.id}"]
+  host_system_ids      = "${data.vsphere_host.mount_hosts.*.id}"
   datastore_cluster_id = "${vsphere_datastore_cluster.datastore_cluster.id}"
 
   type         = "NFS"
@@ -11989,7 +12261,7 @@ resource "vsphere_datastore_cluster" "datastore_cluster" {
 
 resource "vsphere_nas_datastore" "datastore" {
   name                 = "terraform-test-nas"
-  host_system_ids      = ["${data.vsphere_host.esxi_hosts.*.id}"]
+  host_system_ids      = "${data.vsphere_host.esxi_hosts.*.id}"
   datastore_cluster_id = "${vsphere_datastore_cluster.datastore_cluster.id}"
 
   type         = "NFS"
@@ -12166,7 +12438,7 @@ resource "vsphere_datastore_cluster" "datastore_cluster" {
 
 resource "vsphere_nas_datastore" "datastore" {
   name                 = "terraform-test-nas"
-  host_system_ids      = ["${data.vsphere_host.esxi_hosts.*.id}"]
+  host_system_ids      = "${data.vsphere_host.esxi_hosts.*.id}"
   datastore_cluster_id = "${vsphere_datastore_cluster.datastore_cluster.id}"
 
   type         = "NFS"

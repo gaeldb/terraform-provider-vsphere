@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
+	"context"
 	"github.com/hashicorp/terraform/helper/resource"
 	"github.com/hashicorp/terraform/terraform"
 	"github.com/vmware/govmomi/find"
-	"golang.org/x/net/context"
 )
 
 const testAccCheckVSphereDatacenterResourceName = "vsphere_datacenter.testDC"
@@ -77,7 +77,7 @@ resource "vsphere_tag" "terraform-test-tags-alt" {
 
 resource "vsphere_datacenter" "testDC" {
   name = "testDC"
-  tags = ["${vsphere_tag.terraform-test-tags-alt.*.id}"]
+  tags = "${vsphere_tag.terraform-test-tags-alt.*.id}"
 }
 `
 

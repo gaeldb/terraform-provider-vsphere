@@ -32,7 +32,9 @@ func ResourceIDString(d ResourceIDStringer, name string) string {
 func SliceInterfacesToStrings(s []interface{}) []string {
 	var d []string
 	for _, v := range s {
-		d = append(d, v.(string))
+		if o, ok := v.(string); ok {
+			d = append(d, o)
+		}
 	}
 	return d
 }
@@ -247,6 +249,16 @@ func GetInt64Ptr(d *schema.ResourceData, key string) *int64 {
 		return Int64Ptr(int64(v.(int)))
 	}
 	return nil
+}
+
+// GetInt64PtrEmptyZero reads a ResourceData and returns an appropriate *int64
+// for the state of the definition. 0 is returned if it does not exist.
+func GetInt64PtrEmptyZero(d *schema.ResourceData, key string) *int64 {
+	i := GetInt64Ptr(d, key)
+	if i != nil {
+		return i
+	}
+	return Int64Ptr(int64(0))
 }
 
 // SetInt64Ptr sets a ResourceData field depending on if an *int64 exists or

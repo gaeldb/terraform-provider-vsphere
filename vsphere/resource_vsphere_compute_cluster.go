@@ -502,6 +502,11 @@ func resourceVSphereComputeClusterRead(d *schema.ResourceData, meta interface{})
 
 	cluster, err := resourceVSphereComputeClusterGetCluster(d, meta)
 	if err != nil {
+		if viapi.IsManagedObjectNotFoundError(err) {
+			log.Printf("[DEBUG] %s: Resource has been deleted", resourceVSphereComputeClusterIDString(d))
+			d.SetId("")
+			return nil
+		}
 		return err
 	}
 
@@ -1240,6 +1245,13 @@ func flattenClusterDasConfigInfo(d *schema.ResourceData, obj types.ClusterDasCon
 		}
 	}
 
+	// If AdmissionControlEnabled is false, AdmissionControlPolicy is still
+	// configured. Set ha_admission_control_policy to disabled before
+	// flattenBaseClusterDasAdmissionControlPolicy, so AdmissionControlEnabled
+	// can still be checked.
+	if *obj.AdmissionControlEnabled == false {
+		return d.Set("ha_admission_control_policy", clusterAdmissionControlTypeDisabled)
+	}
 	return flattenBaseClusterDasAdmissionControlPolicy(d, obj.AdmissionControlPolicy, version)
 }
 
@@ -1259,6 +1271,8 @@ func expandBaseClusterDasAdmissionControlPolicy(
 		obj = expandClusterFailoverLevelAdmissionControlPolicy(d)
 	case clusterAdmissionControlTypeFailoverHosts:
 		obj = expandClusterFailoverHostAdmissionControlPolicy(d, version)
+	case clusterAdmissionControlTypeDisabled:
+		return nil
 	}
 
 	if version.Newer(viapi.VSphereVersion{Product: version.Product, Major: 6, Minor: 5}) {

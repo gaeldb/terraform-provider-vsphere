@@ -11,13 +11,13 @@ import (
 
 func resourceVSphereHostVirtualSwitch() *schema.Resource {
 	s := map[string]*schema.Schema{
-		"name": &schema.Schema{
+		"name": {
 			Type:        schema.TypeString,
 			Description: "The name of the virtual switch.",
 			Required:    true,
 			ForceNew:    true,
 		},
-		"host_system_id": &schema.Schema{
+		"host_system_id": {
 			Type:        schema.TypeString,
 			Description: "The managed object ID of the host to set the virtual switch up on.",
 			Required:    true,
@@ -48,7 +48,10 @@ func resourceVSphereHostVirtualSwitch() *schema.Resource {
 		Update:        resourceVSphereHostVirtualSwitchUpdate,
 		Delete:        resourceVSphereHostVirtualSwitchDelete,
 		CustomizeDiff: resourceVSphereHostVirtualSwitchCustomizeDiff,
-		Schema:        s,
+		Importer: &schema.ResourceImporter{
+			State: resourceVSphereHostVirtualSwitchImport,
+		},
+		Schema: s,
 	}
 }
 
@@ -135,6 +138,25 @@ func resourceVSphereHostVirtualSwitchDelete(d *schema.ResourceData, meta interfa
 	}
 
 	return nil
+}
+
+func resourceVSphereHostVirtualSwitchImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	hostID, switchName, err := splitHostVirtualSwitchID(d.Id())
+	if err != nil {
+		return []*schema.ResourceData{}, err
+	}
+
+	err = d.Set("host_system_id", hostID)
+	if err != nil {
+		return []*schema.ResourceData{}, err
+	}
+
+	err = d.Set("name", switchName)
+	if err != nil {
+		return []*schema.ResourceData{}, err
+	}
+
+	return []*schema.ResourceData{d}, nil
 }
 
 func resourceVSphereHostVirtualSwitchCustomizeDiff(d *schema.ResourceDiff, meta interface{}) error {
